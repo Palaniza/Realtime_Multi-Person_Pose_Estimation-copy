@@ -80,7 +80,9 @@ int RTPose::connectLimbs(
     const float *peaks,
     int max_peaks,
     float *joints,
-    ModelDescriptor *model_descriptor) {
+    ModelDescriptor *model_descriptor,
+    int image_width,
+    int image_height) {
 
         const auto num_parts = model_descriptor->get_number_parts();
         const auto limbSeq = model_descriptor->get_limb_sequence();
@@ -260,8 +262,8 @@ int RTPose::connectLimbs(
                 int idx = int(subset[i][j]);
                 if (idx) {
                     joints[cnt*num_parts*3 + j*3 +2] = peaks[idx];
-                    joints[cnt*num_parts*3 + j*3 +1] = peaks[idx-1] * DISPLAY_RESOLUTION_HEIGHT/ (float)NET_RESOLUTION_HEIGHT;
-                    joints[cnt*num_parts*3 + j*3] = peaks[idx-2] * DISPLAY_RESOLUTION_WIDTH/ (float)NET_RESOLUTION_WIDTH;
+                    joints[cnt*num_parts*3 + j*3 +1] = peaks[idx-1] * image_height/ (float)NET_RESOLUTION_HEIGHT;
+                    joints[cnt*num_parts*3 + j*3] = peaks[idx-2] * image_width/ (float)NET_RESOLUTION_WIDTH;
                 }
                 else{
                     joints[cnt*num_parts*3 + j*3 +2] = 0;
@@ -339,7 +341,9 @@ int RTPose::connectLimbsCOCO(
     const float *in_peaks,
     int max_peaks,
     float *joints,
-    ModelDescriptor *model_descriptor) {
+    ModelDescriptor *model_descriptor,
+    int image_width,
+    int image_height) {
         /* Parts Connection ---------------------------------------*/
         const auto num_parts = model_descriptor->get_number_parts();
         const auto limbSeq = model_descriptor->get_limb_sequence();
@@ -585,8 +589,8 @@ int RTPose::connectLimbsCOCO(
                 int idx = int(subset[i][j]);
                 if (idx) {
                     joints[cnt*num_parts*3 + j*3 +2] = peaks[idx];
-                    joints[cnt*num_parts*3 + j*3 +1] = peaks[idx-1]* DISPLAY_RESOLUTION_HEIGHT/ (float)NET_RESOLUTION_HEIGHT;//(peaks[idx-1] - padh) * ratio_h;
-                    joints[cnt*num_parts*3 + j*3] = peaks[idx-2]* DISPLAY_RESOLUTION_WIDTH/ (float)NET_RESOLUTION_WIDTH;//(peaks[idx-2] -padw) * ratio_w;
+                    joints[cnt*num_parts*3 + j*3 +1] = peaks[idx-1]* image_height/ (float)NET_RESOLUTION_HEIGHT;//(peaks[idx-1] - padh) * ratio_h;
+                    joints[cnt*num_parts*3 + j*3] = peaks[idx-2]* image_width/ (float)NET_RESOLUTION_WIDTH;//(peaks[idx-2] -padw) * ratio_w;
                 }
                 else{
                     joints[cnt*num_parts*3 + j*3 +2] = 0;
@@ -603,18 +607,18 @@ int RTPose::connectLimbsCOCO(
 }
 
 
-void RTPose::render(float *heatmaps /*GPU*/) {
+void RTPose::render(float *heatmaps /*GPU*/, int image_width, int image_height) {
     float* centers = 0;
     float* poses    = netcopy.joints;
 
     double tic = get_wall_time();
     if (netcopy.up_model_descriptor->get_number_parts()==15) {
-        render_mpi_parts(netcopy.canvas, DISPLAY_RESOLUTION_WIDTH, DISPLAY_RESOLUTION_HEIGHT, NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
+        render_mpi_parts(netcopy.canvas, image_width, image_height, NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
         heatmaps, BOX_SIZE, centers, poses, netcopy.num_people, part_to_show);
     } else if (netcopy.up_model_descriptor->get_number_parts()==18) {
         if (part_to_show-1<=netcopy.up_model_descriptor->get_number_parts()) {
             render_coco_parts(netcopy.canvas,
-            DISPLAY_RESOLUTION_WIDTH, DISPLAY_RESOLUTION_HEIGHT,
+            image_width, image_height,
             NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
             heatmaps, BOX_SIZE, centers, poses,
             netcopy.num_people, part_to_show, 0);
@@ -627,25 +631,25 @@ void RTPose::render(float *heatmaps /*GPU*/) {
                 aff_part = aff_part-2;
                 }
                 aff_part += 1+netcopy.up_model_descriptor->get_number_parts();
-                render_coco_aff(netcopy.canvas, DISPLAY_RESOLUTION_WIDTH, DISPLAY_RESOLUTION_HEIGHT, NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
+                render_coco_aff(netcopy.canvas, image_width, image_height, NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
                 heatmaps, BOX_SIZE, centers, poses, netcopy.num_people, aff_part, num_parts_accum);
         }
     }
     VLOG(2) << "Render time " << (get_wall_time()-tic)*1000.0 << " ms.";
 }
 
-Frame RTPose::postProcessFrame(Frame frame) {
+Frame RTPose::postProcessFrame(Frame frame, int image_width, int image_height) {
 
     frame.postprocesse_begin_time = get_wall_time();
 
     //Mat visualize(NET_RESOLUTION_HEIGHT, NET_RESOLUTION_WIDTH, CV_8UC3);
-    int offset = DISPLAY_RESOLUTION_WIDTH * DISPLAY_RESOLUTION_HEIGHT;
+    int offset = image_width * image_height;
     for(int c = 0; c < 3; c++) {
-        for(int i = 0; i < DISPLAY_RESOLUTION_HEIGHT; i++) {
-            for(int j = 0; j < DISPLAY_RESOLUTION_WIDTH; j++) {
-                int value = int(frame.data_for_mat[c*offset + i*DISPLAY_RESOLUTION_WIDTH + j] + 0.5);
+        for(int i = 0; i < image_height; i++) {
+            for(int j = 0; j < image_width; j++) {
+                int value = int(frame.data_for_mat[c*offset + i*image_width + j] + 0.5);
                 value = value<0 ? 0 : (value > 255 ? 255 : value);
-                frame.data_for_wrap[3*(i*DISPLAY_RESOLUTION_WIDTH + j) + c] = (unsigned char)(value);
+                frame.data_for_wrap[3*(i*image_width + j) + c] = (unsigned char)(value);
             }
         }
     }
@@ -656,38 +660,46 @@ Frame RTPose::postProcessFrame(Frame frame) {
 std::vector<unsigned char> RTPose::run(std::vector<unsigned char> input) {
     cv::Mat data_mat(input, true);
     cv::Mat cvImageIn(imdecode(data_mat, CV_LOAD_IMAGE_COLOR)); //put 0 if you want greyscale
+    
+    int image_width = cvImageIn.cols;
+    int image_height = cvImageIn.rows;
+    if (image_width * image_height > MAX_RESOLUTION_WIDTH * MAX_RESOLUTION_HEIGHT) {
+        LOG(INFO) << "Image too large: " << image_width << "x" << image_height << ". Ignoring.";
+        return input;
+    }
 
     // this is unnecessary copying of frames...
-    Frame inputFrame = getFrame(cvImageIn);
-    Frame processed = processFrame(inputFrame);
-    Frame postProcessed = postProcessFrame(processed);
+    Frame inputFrame = getFrame(cvImageIn, image_width, image_height);
+    Frame processed = processFrame(inputFrame, image_width, image_height);
+    Frame postProcessed = postProcessFrame(processed, image_width, image_height);
 
-    cv::Mat cvImageOut(DISPLAY_RESOLUTION_HEIGHT, DISPLAY_RESOLUTION_WIDTH, CV_8UC3, postProcessed.data_for_wrap);
+    cv::Mat cvImageOut(image_height, image_width, CV_8UC3, postProcessed.data_for_wrap);
 
     delete [] postProcessed.data_for_wrap;
     delete [] postProcessed.data;
     delete [] postProcessed.data_for_mat;
+
+    std::vector<unsigned char> result;
     std::vector<int> p;
     //p.push_back(CV_IMWRITE_JPEG_QUALITY);
     //p.push_back(10);
-    std::vector<unsigned char> result;
     imencode(".jpg", cvImageOut, result, p);
     return result;
 }
 
-Frame RTPose::getFrame(cv::Mat input) {
+Frame RTPose::getFrame(cv::Mat input, int image_width, int image_height) {
     double scale = 0;
     cv::Mat image_uchar;
-    if (input.cols/(double)input.rows>DISPLAY_RESOLUTION_WIDTH/(double)DISPLAY_RESOLUTION_HEIGHT) {
-        scale = DISPLAY_RESOLUTION_WIDTH/(double)input.cols;
+    if (input.cols/(double)input.rows>image_width/(double)image_height) {
+        scale = image_width/(double)input.cols;
     } else {
-        scale = DISPLAY_RESOLUTION_HEIGHT/(double)input.rows;
+        scale = image_height/(double)input.rows;
     }
     cv::Mat M = cv::Mat::eye(2,3,CV_64F);
     M.at<double>(0,0) = scale;
     M.at<double>(1,1) = scale;
     cv::warpAffine(input, image_uchar, M,
-                         cv::Size(DISPLAY_RESOLUTION_WIDTH, DISPLAY_RESOLUTION_HEIGHT),
+                         cv::Size(image_width, image_height),
                          CV_INTER_CUBIC,
                          cv::BORDER_CONSTANT, cv::Scalar(0,0,0));
     if ( image_uchar.empty() ) std::cout << "empty" << std::endl;
@@ -697,9 +709,9 @@ Frame RTPose::getFrame(cv::Mat input) {
     frame.ori_height = input.rows;
     frame.index = global_counter++;
     frame.video_frame_number = frame.index;
-    frame.data_for_wrap = new unsigned char [DISPLAY_RESOLUTION_HEIGHT * DISPLAY_RESOLUTION_WIDTH * 3]; //fill after process
-    frame.data_for_mat = new float [DISPLAY_RESOLUTION_HEIGHT * DISPLAY_RESOLUTION_WIDTH * 3];
-    process_and_pad_image(frame.data_for_mat, image_uchar, DISPLAY_RESOLUTION_WIDTH, DISPLAY_RESOLUTION_HEIGHT, 0);
+    frame.data_for_wrap = new unsigned char [image_height * image_width * 3]; //fill after process
+    frame.data_for_mat = new float [image_height * image_width * 3];
+    process_and_pad_image(frame.data_for_mat, image_uchar, image_width, image_height, 0);
 
     frame.scale = scale;
     //pad and transform to float
@@ -724,7 +736,7 @@ Frame RTPose::getFrame(cv::Mat input) {
     return frame;
 }
 
-Frame RTPose::processFrame(Frame frame) {
+Frame RTPose::processFrame(Frame frame, int image_width, int image_height) {
 
     int offset = NET_RESOLUTION_WIDTH * NET_RESOLUTION_HEIGHT * 3;
     //bool empty = false;
@@ -742,7 +754,7 @@ Frame RTPose::processFrame(Frame frame) {
 
     frame.gpu_fetched_time = get_wall_time();
     
-    cudaMemcpy(netcopy.canvas, frame.data_for_mat, DISPLAY_RESOLUTION_WIDTH * DISPLAY_RESOLUTION_HEIGHT * 3 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(netcopy.canvas, frame.data_for_mat, image_width * image_height * 3 * sizeof(float), cudaMemcpyHostToDevice);
 
     frame_batch = frame;
     //LOG(ERROR)<< "Copy data " << index_array[n] << " to device " << tid << ", now size " << global.input_queue.size();
@@ -769,11 +781,13 @@ Frame RTPose::processFrame(Frame frame) {
     if (netcopy.nms_num_parts==15) {
         cnt = connectLimbs(subset, connection,
                                              heatmap_pointer, peaks,
-                                             netcopy.nms_max_peaks, joints, netcopy.up_model_descriptor.get());
+                                             netcopy.nms_max_peaks, joints, netcopy.up_model_descriptor.get(),
+                                             image_width, image_height);
     } else {
         cnt = connectLimbsCOCO(subset, connection,
                                              heatmap_pointer, peaks,
-                                             netcopy.nms_max_peaks, joints, netcopy.up_model_descriptor.get());
+                                             netcopy.nms_max_peaks, joints, netcopy.up_model_descriptor.get(),
+                                             image_width, image_height);
     }
 
     VLOG(2) << "CNT: " << cnt << " Connect time " << (get_wall_time()-tic)*1000.0 << " ms.";
@@ -786,7 +800,7 @@ Frame RTPose::processFrame(Frame frame) {
 
     if (subset.size() != 0) {
         //LOG(ERROR) << "Rendering";
-        render(heatmap_pointer); //only support batch size = 1!!!!
+        render(heatmap_pointer, image_width, image_height); //only support batch size = 1!!!!
         frame_batch.numPeople = netcopy.num_people[0];
         frame_batch.gpu_computed_time = get_wall_time();
         frame_batch.joints = boost::shared_ptr<float[]>(new float[frame_batch.numPeople*MAX_NUM_PARTS*3]);
@@ -795,15 +809,15 @@ Frame RTPose::processFrame(Frame frame) {
         }
 
 
-        cudaMemcpy(frame_batch.data_for_mat, netcopy.canvas, DISPLAY_RESOLUTION_HEIGHT * DISPLAY_RESOLUTION_WIDTH * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(frame_batch.data_for_mat, netcopy.canvas, image_height * image_width * 3 * sizeof(float), cudaMemcpyDeviceToHost);
         return frame_batch;
     }
     else {
-        render(heatmap_pointer);
+        render(heatmap_pointer, image_width, image_height);
         //frame_batch[n].data should revert to 0-255
         frame_batch.numPeople = 0;
         frame_batch.gpu_computed_time = get_wall_time();
-        cudaMemcpy(frame_batch.data_for_mat, netcopy    .canvas, DISPLAY_RESOLUTION_HEIGHT * DISPLAY_RESOLUTION_WIDTH * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(frame_batch.data_for_mat, netcopy    .canvas, image_height * image_width * 3 * sizeof(float), cudaMemcpyDeviceToHost);
         return frame_batch;
     }
 }
@@ -877,6 +891,6 @@ void RTPose::warmup(int device_id) {
     LOG(INFO) << "Dry running...";
     netcopy.person_net->ForwardFrom(0);
     LOG(INFO) << "Success.";
-    cudaMalloc(&netcopy.canvas, DISPLAY_RESOLUTION_WIDTH * DISPLAY_RESOLUTION_HEIGHT * 3 * sizeof(float));
+     cudaMalloc(&netcopy.canvas, MAX_RESOLUTION_WIDTH * MAX_RESOLUTION_HEIGHT * 3 * sizeof(float));
     cudaMalloc(&netcopy.joints, MAX_NUM_PARTS*3*MAX_PEOPLE * sizeof(float) );
 }

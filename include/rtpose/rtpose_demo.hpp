@@ -41,7 +41,9 @@ public:
     				 const float *peaks,
     				 int max_peaks,
     			     float *joints,	
-    				 ModelDescriptor *model_descriptor);
+    				 ModelDescriptor *model_descriptor,
+    				 int image_width,
+    				 int image_height);
 	int distanceThresholdPeaks(const float *in_peaks, int max_peaks, float *peaks, 
 		ModelDescriptor *model_descriptor);
 	int connectLimbsCOCO(std::vector< std::vector<double>> &subset,
@@ -50,13 +52,15 @@ public:
     					 const float *in_peaks,
     					 int max_peaks,
 				 	     float *joints,
-    					 ModelDescriptor *model_descriptor);
-	Frame processFrame(Frame frame);
-	void render(float *heatmaps /*GPU*/);
-	Frame postProcessFrame(Frame frame);
+    					 ModelDescriptor *model_descriptor,
+    					 int image_width,
+    					 int image_height);
+	Frame processFrame(Frame frame, int image_width, int image_height);
+	void render(float *heatmaps /*GPU*/, int image_width, int image_height);
+	Frame postProcessFrame(Frame frame, int image_width, int image_height);
 
 	std::vector<unsigned char> run(std::vector<unsigned char> input);
-	Frame getFrame(cv::Mat input);
+	Frame getFrame(cv::Mat input, int image_width, int image_height);
 
 private:
 	NetCopy netcopy;
@@ -64,8 +68,8 @@ private:
 	std::string PERSON_DETECTOR_CAFFEMODEL = "model/coco/pose_iter_440000.caffemodel"; //person detector
 	std::string PERSON_DETECTOR_PROTO = "model/coco/pose_deploy_linevec.prototxt"; //person detector
 	// Global parameters
-	int DISPLAY_RESOLUTION_WIDTH = 640;
-	int DISPLAY_RESOLUTION_HEIGHT = 480;
+	int MAX_RESOLUTION_WIDTH = 2000;
+	int MAX_RESOLUTION_HEIGHT = 4000;
 	int NET_RESOLUTION_WIDTH = 656;
 	int NET_RESOLUTION_HEIGHT = 368;
 	int BATCH_SIZE = 1;      // "Number of scales to average"
