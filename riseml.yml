@@ -1,0 +1,9 @@
+description: Demo for the implementation of 'Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields' by Zhe Cao et al.
+image:
+  - riseml/caffe-prereqs
+service:
+  commands:
+    - ./install_caffe_and_cpm.sh
+    - ./build/examples/rtpose/rtpose_demo_server.bin --logtostderr=1 --port $PORT
+  input: image
+  output: image
