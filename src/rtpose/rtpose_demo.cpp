@@ -891,6 +891,6 @@ void RTPose::warmup(int device_id) {
     LOG(INFO) << "Dry running...";
     netcopy.person_net->ForwardFrom(0);
     LOG(INFO) << "Success.";
-     cudaMalloc(&netcopy.canvas, MAX_RESOLUTION_WIDTH * MAX_RESOLUTION_HEIGHT * 3 * sizeof(float));
+    cudaMalloc(&netcopy.canvas, MAX_RESOLUTION_WIDTH * MAX_RESOLUTION_HEIGHT * 3 * sizeof(float));
     cudaMalloc(&netcopy.joints, MAX_NUM_PARTS*3*MAX_PEOPLE * sizeof(float) );
 }

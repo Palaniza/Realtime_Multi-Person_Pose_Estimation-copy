@@ -70,7 +70,7 @@ private:
 	// Global parameters
 	int MAX_RESOLUTION_WIDTH = 2000;
 	int MAX_RESOLUTION_HEIGHT = 4000;
-	int NET_RESOLUTION_WIDTH = 656;
+	int NET_RESOLUTION_WIDTH = 496;
 	int NET_RESOLUTION_HEIGHT = 368;
 	int BATCH_SIZE = 1;      // "Number of scales to average"
 	double SCALE_GAP = 0.3;  // "Scale gap between scales. No effect unless num_scales>1"
