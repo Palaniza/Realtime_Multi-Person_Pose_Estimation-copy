@@ -607,7 +607,7 @@ int RTPose::connectLimbsCOCO(
 }
 
 
-void RTPose::render(float *heatmaps /*GPU*/, int image_width, int image_height) {
+void RTPose::render(float *heatmaps /*GPU*/, int image_width, int image_height, int part_to_show, int googly_eyes) {
     float* centers = 0;
     float* poses    = netcopy.joints;
 
@@ -621,7 +621,7 @@ void RTPose::render(float *heatmaps /*GPU*/, int image_width, int image_height) 
             image_width, image_height,
             NET_RESOLUTION_WIDTH, NET_RESOLUTION_HEIGHT,
             heatmaps, BOX_SIZE, centers, poses,
-            netcopy.num_people, part_to_show, 0);
+            netcopy.num_people, part_to_show, googly_eyes);
         } else {
             int aff_part = ((part_to_show-1)-netcopy.up_model_descriptor->get_number_parts()-1)*2;
             int num_parts_accum = 1;
@@ -657,12 +657,28 @@ Frame RTPose::postProcessFrame(Frame frame, int image_width, int image_height) {
     return frame;
 }
 
-std::vector<unsigned char> RTPose::run(std::vector<unsigned char> input) {
+std::vector<unsigned char> RTPose::run(std::vector<unsigned char> input, param_map & params) {
     cv::Mat data_mat(input, true);
     cv::Mat cvImageIn(imdecode(data_mat, CV_LOAD_IMAGE_COLOR)); //put 0 if you want greyscale
     
     int image_width = cvImageIn.cols;
     int image_height = cvImageIn.rows;
+    int part_to_show_param = part_to_show;
+    int googly_eyes_param = 0;
+    if (params.count("googly_eyes")) {
+        googly_eyes_param = std::stol(params["googly_eyes"]);
+        if (googly_eyes_param != 0 && googly_eyes_param != 1) {
+            LOG(INFO) << "googly_eyes param with invalid value " << googly_eyes_param << " ignored.";
+            googly_eyes_param = 0;
+        }
+    }
+    if (params.count("part_to_show")) {
+        part_to_show_param = std::stol(params["part_to_show"]);
+        if (part_to_show_param < 0 || part_to_show_param > 55) {
+            LOG(INFO) << "part_to_show param with invalid value " << part_to_show_param << " ignored.";
+            part_to_show_param = part_to_show;
+        }
+    }
     if (image_width * image_height > MAX_RESOLUTION_WIDTH * MAX_RESOLUTION_HEIGHT) {
         LOG(INFO) << "Image too large: " << image_width << "x" << image_height << ". Ignoring.";
         return input;
@@ -670,7 +686,7 @@ std::vector<unsigned char> RTPose::run(std::vector<unsigned char> input) {
 
     // this is unnecessary copying of frames...
     Frame inputFrame = getFrame(cvImageIn, image_width, image_height);
-    Frame processed = processFrame(inputFrame, image_width, image_height);
+    Frame processed = processFrame(inputFrame, image_width, image_height, part_to_show_param, googly_eyes_param);
     Frame postProcessed = postProcessFrame(processed, image_width, image_height);
 
     cv::Mat cvImageOut(image_height, image_width, CV_8UC3, postProcessed.data_for_wrap);
@@ -736,7 +752,7 @@ Frame RTPose::getFrame(cv::Mat input, int image_width, int image_height) {
     return frame;
 }
 
-Frame RTPose::processFrame(Frame frame, int image_width, int image_height) {
+Frame RTPose::processFrame(Frame frame, int image_width, int image_height, int part_to_show, int googly_eyes) {
 
     int offset = NET_RESOLUTION_WIDTH * NET_RESOLUTION_HEIGHT * 3;
     //bool empty = false;
@@ -800,7 +816,7 @@ Frame RTPose::processFrame(Frame frame, int image_width, int image_height) {
 
     if (subset.size() != 0) {
         //LOG(ERROR) << "Rendering";
-        render(heatmap_pointer, image_width, image_height); //only support batch size = 1!!!!
+        render(heatmap_pointer, image_width, image_height, part_to_show, googly_eyes); //only support batch size = 1!!!!
         frame_batch.numPeople = netcopy.num_people[0];
         frame_batch.gpu_computed_time = get_wall_time();
         frame_batch.joints = boost::shared_ptr<float[]>(new float[frame_batch.numPeople*MAX_NUM_PARTS*3]);
@@ -813,7 +829,7 @@ Frame RTPose::processFrame(Frame frame, int image_width, int image_height) {
         return frame_batch;
     }
     else {
-        render(heatmap_pointer, image_width, image_height);
+        render(heatmap_pointer, image_width, image_height, part_to_show, googly_eyes);
         //frame_batch[n].data should revert to 0-255
         frame_batch.numPeople = 0;
         frame_batch.gpu_computed_time = get_wall_time();

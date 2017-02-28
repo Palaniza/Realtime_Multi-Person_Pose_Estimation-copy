@@ -2,7 +2,7 @@
 #include "rtpose/modelDescriptorFactory.h"
 #include "rtpose/renderFunctions.h"
 
-
+#include <unordered_map>
 #include "caffe/cpm/frame.h"
 #include "caffe/cpm/layers/imresize_layer.hpp"
 #include "caffe/cpm/layers/nms_layer.hpp"
@@ -31,6 +31,9 @@ double get_wall_time() {
     //return (double)time.tv_usec;
 }
 
+typedef std::unordered_map<std::string, std::string> param_map;
+
+
 class RTPose {   
 public:
 	RTPose(int deviceId);
@@ -55,11 +58,11 @@ public:
     					 ModelDescriptor *model_descriptor,
     					 int image_width,
     					 int image_height);
-	Frame processFrame(Frame frame, int image_width, int image_height);
-	void render(float *heatmaps /*GPU*/, int image_width, int image_height);
+	Frame processFrame(Frame frame, int image_width, int image_height, int part_to_show, int googly_eyes);
+	void render(float *heatmaps /*GPU*/, int image_width, int image_height, int part_to_show, int googly_eyes);
 	Frame postProcessFrame(Frame frame, int image_width, int image_height);
 
-	std::vector<unsigned char> run(std::vector<unsigned char> input);
+	std::vector<unsigned char> run(std::vector<unsigned char> input, param_map & params);
 	Frame getFrame(cv::Mat input, int image_width, int image_height);
 
 private:

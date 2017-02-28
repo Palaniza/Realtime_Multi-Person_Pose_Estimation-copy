@@ -16,6 +16,7 @@ using namespace std;
 using namespace mimetic;
 
 typedef SimpleWeb::Server<SimpleWeb::HTTP> HttpServer;
+typedef std::unordered_multimap<std::string, std::string, case_insensitive_hash, case_insensitive_equals> query_params;
 
 // CLI Flags
 DEFINE_int32(port,          8080,              "Port to run webserver on.");
@@ -37,6 +38,8 @@ stringstream getImage(MimeEntity* pMe)
 	}
 	return image;
 }
+
+
 
 struct request_data {
   shared_ptr<HttpServer::Response> response;
@@ -114,7 +117,7 @@ void process_request(work_queue& queue, int deviceId) {
    						image.seekg(0, ios::beg);
 				    	string img_data = image.str();
 				    	std::vector<unsigned char> vectordata(img_data.begin(),img_data.end());
-				    	auto result = rtpose.run(vectordata);
+				    	auto result = rtpose.run(vectordata, p_req->request->query_string);
 				    	std::string content(result.begin(), result.end());
 				    	//string content = img_data;
 		 				*(p_req->response) << "HTTP/1.1 200 OK\r\nContent-Length: " << content.length() << "\r\n"
