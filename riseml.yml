@@ -1,4 +1,4 @@
-description: Demo for the implementation of 'Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields' by Zhe Cao et al.
+description: Demo for the implementation of 'Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields' by Zhe Cao et al., 2016
 image:
   - riseml/caffe-prereqs
 service:
