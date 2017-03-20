@@ -1,6 +1,6 @@
-image:
-  name: riseml/caffe-prereqs
 deploy:
+  image:
+    name: riseml/caffe-prereqs
   run:
     - ./install_caffe_and_cpm.sh
     - ./build/examples/rtpose/rtpose_demo_server.bin --logtostderr=1 --port $PORT
